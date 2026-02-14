@@ -150,23 +150,27 @@ else:
                     try:
                         from telethon import utils
                         d_filters = await client(functions.messages.GetDialogFiltersRequest())
-                        for f in d_filters:
-                            if hasattr(f, 'title') and f.title:
-                                folder_ids = []
-                                if hasattr(f, 'include_peers'):
-                                    for p in f.include_peers:
-                                        try:
-                                            # Получаем правильный ID (с учетом типа чата -100...)
-                                            peer_id = utils.get_peer_id(p)
-                                            folder_ids.append(peer_id)
-                                        except: pass
-                                
-                                # Добавляем даже пустые папки (они могут быть по типам)
-                                folders[f.title] = folder_ids
                         
-                        st.toast(f"Найдено папок в аккаунте: {len(d_filters)}")
+                        found_folders_count = 0
+                        for f in d_filters:
+                            # Проверяем наличие заголовка (у системных папок его может не быть)
+                            title = getattr(f, 'title', None)
+                            if title:
+                                folder_ids = []
+                                # Собираем все ID из этой папки
+                                peers = getattr(f, 'include_peers', [])
+                                for p in peers:
+                                    try:
+                                        p_id = utils.get_peer_id(p)
+                                        folder_ids.append(p_id)
+                                    except: continue
+                                
+                                folders[title] = folder_ids
+                                found_folders_count += 1
+                        
+                        st.toast(f"✅ Синхронизация: {found_folders_count} папок и {len(chats)} чатов")
                     except Exception as e:
-                        pass
+                        st.toast(f"ℹ️ Папки не загружены: {str(e)}")
                     
                     folders["🤖 Боты"] = [c['id'] for c in chats if c['type'] == "bot"]
                     folders["📢 Каналы"] = [c['id'] for c in chats if c['type'] == "channel"]
