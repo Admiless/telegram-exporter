@@ -201,17 +201,51 @@ else:
                     for t in sel_chats:
                         chat_dir = os.path.join(exp_path, str(t['id']))
                         os.makedirs(chat_dir, exist_ok=True)
-                        ms = []
+                        
+                        full_data = {
+                            "name": t['title'],
+                            "type": "public_channel" if t['type'] == "channel" else "personal_chat",
+                            "id": t['id'],
+                            "messages": []
+                        }
+                        
                         off = datetime.combine(ed, datetime.max.time()) if 'ed' in locals() and ed else None
                         async for m in client.iter_messages(t['id'], limit=1000, offset_date=off):
                             if 'sd' in locals() and sd and m.date.date() < sd: break
-                            ms.append({'d': m.date.isoformat(), 't': m.text or ""})
+                            
+                            # Определяем имя отправителя
+                            sender_name = None
+                            sender_id = None
+                            if m.sender:
+                                sender_id = m.sender_id
+                                if hasattr(m.sender, 'first_name'):
+                                    sender_name = f"{m.sender.first_name} {getattr(m.sender, 'last_name', '') or ''}".strip()
+                                elif hasattr(m.sender, 'title'):
+                                    sender_name = m.sender.title
+                            
+                            msg_obj = {
+                                "id": m.id,
+                                "type": "message",
+                                "date": m.date.isoformat(),
+                                "from": sender_name,
+                                "from_id": f"user{sender_id}" if sender_id else None,
+                                "text": m.text or "",
+                            }
+                            
+                            if m.reply_to:
+                                msg_obj["reply_to_message_id"] = m.reply_to.reply_to_msg_id
+                                
+                            full_data["messages"].append(msg_obj)
                         
-                        f_name = "data.json" if exp_fmt == "JSON" else "data.txt"
+                        # Сохраняем по стандарту
+                        f_name = "result.json" if exp_fmt == "JSON" else "data.txt"
                         p = os.path.join(chat_dir, f_name)
                         with open(p, 'w', encoding='utf-8') as f:
-                            if exp_fmt == "JSON": json.dump(ms, f, ensure_ascii=False, indent=2)
-                            else: [f.write(f"[{x['d']}] {x['t']}\n---\n") for x in ms]
+                            if exp_fmt == "JSON":
+                                json.dump(full_data, f, ensure_ascii=False, indent=2)
+                            else:
+                                for x in full_data["messages"]:
+                                    f.write(f"[{x['date']}] {x['from'] or 'Unknown'}: {x['text']}\n---\n")
                     
                     zip_p = os.path.join(temp_dir, "telegram_export")
                     shutil.make_archive(zip_p, 'zip', exp_path)
